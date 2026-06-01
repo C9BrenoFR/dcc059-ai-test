@@ -6,13 +6,6 @@ from graph import Graph
 from node import Node
 from edge import Edge
 
-
-def build_graph():
-	if len(sys.argv) < 2:
-		raise SystemExit("Usage: python main.py <path-to-ccplib-instance>")
-	return build_graph_from_ccplib(sys.argv[1])
-
-
 def build_graph_from_ccplib(path):
 	with open(path, "r", encoding="utf-8") as file:
 		content = file.read()
@@ -156,7 +149,36 @@ def draw_graph(g):
 		)
 	plt.show()
 
+def menu(g) :
+	while True:
+		print("+-----------------------------------+")
+		print("|         AÇÕES DISPONIVEIS         |")
+		print("+-----------------------------------+")
+		print("| (1) Imprimir lista de adjacencia  |")
+		print("| (2) Desenhar Grafo                |")
+		print("| (0) Sair                          |")
+		print("+-----------------------------------+")
+
+		selected = int(input("\nDigite o código da ação: "))
+
+		match selected:
+			case 0:
+				print ("Encerrando...")
+				break
+			case 1:
+				print(g.get_adjacency_list())
+			case 2:
+				draw_graph(g)
+			case _:
+				print("Opção inválida")
+
+		
+
 if __name__ == "__main__":
-	g = build_graph()
-	print(g.get_adjacency_list())
-	draw_graph(g)
+	if len(sys.argv) < 2:
+		raise SystemExit("Utilização: python main.py <caminho-para-instancia-ccplib>")
+	
+	print(f"Inicializando Grafo {sys.argv[1]} ...")
+	g = build_graph_from_ccplib(sys.argv[1])
+
+	menu(g)
