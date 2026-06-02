@@ -53,8 +53,9 @@ class Graph:
     # as outras implementações serão apagadas
     #
     # Todos os modelos receberão o mesmo contexto:
-    #   1. Pasta de instancias ccplib
+    #   1. Link da função que ele desenvolver (Também estara no prompt) 
     #   2. Arquivos graph.py, node.py e edge.py 
+    #   3. Pasta de instancias ccplib
 
     # Função Criada por GPT-5.2-Codex 
     def capable_clustering_v1():
