@@ -4,13 +4,14 @@ from utils import draw_graph, build_graph_from_ccplib
 
 def menu(g) :
 	while True:
-		print("+-----------------------------------+")
-		print("|         AÇÕES DISPONIVEIS         |")
-		print("+-----------------------------------+")
-		print("| (1) Imprimir lista de adjacencia  |")
-		print("| (2) Desenhar Grafo                |")
-		print("| (0) Sair                          |")
-		print("+-----------------------------------+")
+		print("+-------------------------------------+")
+		print("|          AÇÕES DISPONIVEIS          |")
+		print("+-------------------------------------+")
+		print("| (1) Imprimir lista de adjacencia    |")
+		print("| (2) Desenhar Grafo                  |")
+		print("| (3) Imprimir configurações do Grafo |")
+		print("| (0) Sair                            |")
+		print("+-------------------------------------+")
 
 		selected = int(input("\nDigite o código da ação: "))
 
@@ -22,6 +23,8 @@ def menu(g) :
 				print(g.get_adjacency_list())
 			case 2:
 				draw_graph(g)
+			case 3:
+				g.print_config()
 			case _:
 				print("Opção inválida")
 
