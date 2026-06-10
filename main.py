@@ -62,7 +62,15 @@ def menu(g) :
 				draw_graphs(pcc["clusters"])
 
 			case 7:
-				print("WIP...")
+				start = time.perf_counter()
+				pcc = g.capable_clustering_v4()
+				end = time.perf_counter()
+
+				print(f"\nPeso dos clusters: {pcc['cluster_weights']}")
+				print(f"Beneficio total:   {pcc['total_benefit']}")
+				print(f"Tempo de execução: {(end - start) * 1000:.3f} ms")
+				
+				draw_graphs(pcc['clusters'])
 			case 8:
 				start = time.perf_counter()
 				gpt_pcc = g.capable_clustering_v1()
@@ -81,6 +89,12 @@ def menu(g) :
 				end = time.perf_counter()
 
 				gemini_benchmark = (end - start) * 1000
+				
+				start = time.perf_counter()
+				raptor_pcc = g.capable_clustering_v4()
+				end = time.perf_counter()
+
+				raptor_benchmark = (end - start) * 1000
 
 				print("\n+---------------------------------------------------------------+")
 				print("| Algoritmo | Tempo (ms)     | Beneficio Total | Nº de Clusters |")
@@ -88,6 +102,7 @@ def menu(g) :
 				print(f"| GPT       | {gpt_benchmark:14.3f} | {gpt_pcc["total_benefit"]:15.5f} | {len(gpt_pcc["cluster_weights"]):14d} |")
 				print(f"| Claude    | {claude_benchmark:14.3f} | {claude_pcc["total_benefit"]:15.5f} | {len(claude_pcc["cluster_weights"]):14d} |")
 				print(f"| Gemini    | {gemini_benchmark:14.3f} | {gemini_pcc["total_benefit"]:15.5f} | {len(gemini_pcc["cluster_weights"]):14d} |")
+				print(f"| Raptor    | {raptor_benchmark:14.3f} | {raptor_pcc["total_benefit"]:15.5f} | {len(raptor_pcc["cluster_weights"]):14d} |")
 				print("+-----------+----------------+-----------------+----------------+")
 			case _:
 				print("Opção inválida")

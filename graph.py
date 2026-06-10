@@ -605,5 +605,145 @@ class Graph:
         }
 
     # Função Criada por Raptor Mini 
-    def capable_clustering_v4():
-        pass
+    def capable_clustering_v4(self):
+        if self.num_clusters is None:
+            raise ValueError("Graph must specify num_clusters for PCC")
+
+        if self.cluster_limits and len(self.cluster_limits) != self.num_clusters * 2:
+            raise ValueError("cluster_limits must have exactly two values per cluster")
+
+        if self.cluster_limits:
+            min_limits = [float(self.cluster_limits[i * 2]) for i in range(self.num_clusters)]
+            max_limits = [float(self.cluster_limits[i * 2 + 1]) for i in range(self.num_clusters)]
+        elif self.cluster_capacity is not None:
+            min_limits = [0.0] * self.num_clusters
+            max_limits = [float(self.cluster_capacity)] * self.num_clusters
+        else:
+            raise ValueError("Graph must specify cluster_limits or cluster_capacity for PCC")
+
+        node_weights = {node.identifier: float(node.weight) for node in self.nodes}
+        benefit = {node.identifier: {} for node in self.nodes}
+        for edge in self.edges:
+            origin = edge.origin
+            destination = edge.destination
+            weight = float(edge.weight)
+            benefit[origin][destination] = weight
+            benefit[destination][origin] = weight
+
+        def node_score(node_id):
+            return node_weights[node_id], sum(benefit[node_id].values())
+
+        node_order = sorted(
+            node_weights.keys(),
+            key=lambda node_id: (-node_score(node_id)[0], -node_score(node_id)[1], node_id),
+        )
+
+        cluster_nodes = [set() for _ in range(self.num_clusters)]
+        cluster_loads = [0.0 for _ in range(self.num_clusters)]
+        assignment = {}
+        remaining_nodes = set(node_weights.keys())
+
+        # Seed each cluster with a node that fits its capacity.
+        cluster_indices = sorted(range(self.num_clusters), key=lambda k: (-max_limits[k], -min_limits[k]))
+        for k in cluster_indices:
+            candidate = None
+            for node_id in node_order:
+                if node_id in remaining_nodes and node_weights[node_id] <= max_limits[k]:
+                    candidate = node_id
+                    break
+            if candidate is None:
+                raise ValueError("Unable to find a feasible seed node for cluster")
+            assignment[candidate] = k
+            cluster_nodes[k].add(candidate)
+            cluster_loads[k] += node_weights[candidate]
+            remaining_nodes.remove(candidate)
+
+        # Assign remaining nodes greedily by benefit gain while keeping capacities.
+        for node_id in node_order:
+            if node_id not in remaining_nodes:
+                continue
+
+            best_cluster = None
+            best_gain = None
+            for k in range(self.num_clusters):
+                if cluster_loads[k] + node_weights[node_id] > max_limits[k]:
+                    continue
+                gain = sum(benefit[node_id].get(other, 0.0) for other in cluster_nodes[k])
+                if best_cluster is None or gain > best_gain:
+                    best_cluster = k
+                    best_gain = gain
+            if best_cluster is None:
+                feasible = [k for k in range(self.num_clusters) if cluster_loads[k] + node_weights[node_id] <= max_limits[k]]
+                if not feasible:
+                    raise ValueError("No feasible cluster available for node assignment")
+                best_cluster = min(feasible, key=lambda k: cluster_loads[k])
+
+            assignment[node_id] = best_cluster
+            cluster_nodes[best_cluster].add(node_id)
+            cluster_loads[best_cluster] += node_weights[node_id]
+            remaining_nodes.remove(node_id)
+
+        # Repair minimum constraints, moving nodes only when feasible.
+        underfull = [k for k in range(self.num_clusters) if cluster_loads[k] < min_limits[k]]
+        for target in underfull:
+            if cluster_loads[target] >= min_limits[target]:
+                continue
+            needed = min_limits[target] - cluster_loads[target]
+            candidates = []
+            for source in range(self.num_clusters):
+                if source == target:
+                    continue
+                for node_id in list(cluster_nodes[source]):
+                    if cluster_loads[source] - node_weights[node_id] < min_limits[source]:
+                        continue
+                    if cluster_loads[target] + node_weights[node_id] > max_limits[target]:
+                        continue
+                    loss = sum(benefit[node_id].get(other, 0.0) for other in cluster_nodes[source] if other != node_id)
+                    gain = sum(benefit[node_id].get(other, 0.0) for other in cluster_nodes[target])
+                    net = gain - loss
+                    candidates.append((net, node_id, source))
+            candidates.sort(reverse=True)
+            for net, node_id, source in candidates:
+                if cluster_loads[target] >= min_limits[target]:
+                    break
+                if cluster_loads[source] - node_weights[node_id] < min_limits[source]:
+                    continue
+                if cluster_loads[target] + node_weights[node_id] > max_limits[target]:
+                    continue
+                cluster_nodes[source].remove(node_id)
+                cluster_loads[source] -= node_weights[node_id]
+                cluster_nodes[target].add(node_id)
+                cluster_loads[target] += node_weights[node_id]
+                assignment[node_id] = target
+            if cluster_loads[target] < min_limits[target]:
+                raise ValueError("Unable to satisfy minimum cluster limits")
+
+        total_benefit = 0.0
+        for edge in self.edges:
+            if assignment.get(edge.origin) == assignment.get(edge.destination):
+                total_benefit += float(edge.weight)
+
+        cluster_graphs = []
+        id_to_node = {node.identifier: node for node in self.nodes}
+        for k in range(self.num_clusters):
+            cluster_nodes_list = sorted(cluster_nodes[k])
+            cluster_edges = [
+                edge
+                for edge in self.edges
+                if assignment.get(edge.origin) == assignment.get(edge.destination) == k
+            ]
+            cluster_graphs.append(
+                Graph(
+                    nodes=[id_to_node[node_id] for node_id in cluster_nodes_list],
+                    edges=cluster_edges,
+                    is_directed=self.is_directed,
+                    is_edge_weighted=self.is_edge_weighted,
+                    is_node_weighted=self.is_node_weighted,
+                )
+            )
+
+        return {
+            "clusters": cluster_graphs,
+            "cluster_weights": cluster_loads,
+            "total_benefit": total_benefit,
+        }
