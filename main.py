@@ -1,7 +1,7 @@
 import sys
 import time
 
-from utils import draw_graph, build_graph_from_ccplib
+from utils import draw_graph, draw_graphs, build_graph_from_ccplib
 
 def menu(g) :
 	while True:
@@ -39,6 +39,21 @@ def menu(g) :
 				print(f"Beneficio total: {pcc["total_benefit"]}")
 				print(f"Tempo de execução: {(end - start) * 1000:.3f} ms")
 				draw_graph(pcc["clusters"])
+			case 5:
+				print("WIP...")
+			case 6:
+				start = time.perf_counter()
+				pcc = g.capable_clustering_v2()
+				end = time.perf_counter()
+
+				print(f"\nPeso dos clusters: {pcc["cluster_weights"]}")
+				print(f"Beneficio total: {pcc["total_benefit"]}")
+				print(f"Tempo de execução: {(end - start) * 1000:.3f} ms")
+				
+				draw_graphs(pcc["clusters"])
+
+			case 7:
+				print("WIP...")
 			case _:
 				print("Opção inválida")
 
