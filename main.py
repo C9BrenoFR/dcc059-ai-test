@@ -5,7 +5,7 @@ from utils import draw_graph, draw_graphs, build_graph_from_ccplib
 
 def menu(g) :
 	while True:
-		print("+-------------------------------------+")
+		print("\n+-------------------------------------+")
 		print("|          AÇÕES DISPONIVEIS          |")
 		print("+-------------------------------------+")
 		print("| (1) Imprimir lista de adjacencia    |")
@@ -15,6 +15,7 @@ def menu(g) :
 		print("| (5) PCC (Gemini)                    |")
 		print("| (6) PCC (Calude)                    |")
 		print("| (7) PCC (Raptor)                    |")
+		print("| (8) Benchmark de comparação         |")
 		print("| (0) Sair                            |")
 		print("+-------------------------------------+")
 
@@ -35,9 +36,9 @@ def menu(g) :
 				pcc = g.capable_clustering_v1()
 				end = time.perf_counter()
 
-				print(f"\nPeso dos clusters: {pcc["cluster_weights"]}")
-				print(f"Beneficio total: {pcc["total_benefit"]}")
-				print(f"Tempo de execução: {(end - start) * 1000:.3f} ms")
+				print(f"\nPeso dos clusters:   {pcc["cluster_weights"]}")
+				print(f"Beneficio total:     {pcc["total_benefit"]}")
+				print(f"Tempo de execução:   {(end - start) * 1000:.3f} ms")
 				draw_graph(pcc["clusters"])
 			case 5:
 				print("WIP...")
@@ -47,13 +48,32 @@ def menu(g) :
 				end = time.perf_counter()
 
 				print(f"\nPeso dos clusters: {pcc["cluster_weights"]}")
-				print(f"Beneficio total: {pcc["total_benefit"]}")
+				print(f"Beneficio total:   {pcc["total_benefit"]}")
 				print(f"Tempo de execução: {(end - start) * 1000:.3f} ms")
 				
 				draw_graphs(pcc["clusters"])
 
 			case 7:
 				print("WIP...")
+			case 8:
+				start = time.perf_counter()
+				gpt_pcc = g.capable_clustering_v1()
+				end = time.perf_counter()
+
+				gpt_benchmark = (end - start) * 1000
+				
+				start = time.perf_counter()
+				claude_pcc = g.capable_clustering_v2()
+				end = time.perf_counter()
+
+				claude_benchmark = (end - start) * 1000
+
+				print("\n+---------------------------------------------------------------+")
+				print("| Algoritmo | Tempo (ms)     | Beneficio Total | Nº de Clusters |")
+				print("+-----------+----------------+-----------------+----------------+")
+				print(f"| GPT       |   {gpt_benchmark:12.3f} |    {gpt_pcc["total_benefit"]:12.3f} |   {len(gpt_pcc["cluster_weights"]):12d} |")
+				print(f"| Claude    |   {claude_benchmark:12.3f} |    {claude_pcc["total_benefit"]:12.3f} |   {len(claude_pcc["cluster_weights"]):12d} |")
+				print("+-----------+----------------+-----------------+----------------+")
 			case _:
 				print("Opção inválida")
 
