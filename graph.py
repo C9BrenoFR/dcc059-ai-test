@@ -493,9 +493,116 @@ class Graph:
             "assignment": assignment,
         }
 
-    # Função Criada por Gemini 3.1 Pro 
-    def capable_clustering_v3():
-        pass
+    def capable_clustering_v3(self):
+        import random
+        from graph import Graph
+        from edge import Edge
+
+        num_clusters = self.num_clusters
+        limits = []
+        for i in range(1, num_clusters + 1):
+            idx_min = (i - 1) * 2
+            idx_max = idx_min + 1
+            lim_min = self.cluster_limits[idx_min] if idx_min < len(self.cluster_limits) else 0
+            lim_max = self.cluster_limits[idx_max] if idx_max < len(self.cluster_limits) else float('inf')
+            limits.append((lim_min, lim_max))
+
+        adj = {}
+        for edge in self.edges:
+            if edge.origin not in adj: adj[edge.origin] = {}
+            if edge.destination not in adj: adj[edge.destination] = {}
+            adj[edge.origin][edge.destination] = edge.weight
+            adj[edge.destination][edge.origin] = edge.weight
+
+        best_assignment = None
+        best_benefit = -1
+        best_weights = []
+
+        for _ in range(100):
+            nodes_sorted = sorted(self.nodes, key=lambda n: n.weight, reverse=True)
+            assignment = {}
+            cluster_weights = [0] * num_clusters
+            
+            valid = True
+            for node in nodes_sorted:
+                valid_clusters = [c for c in range(num_clusters) if cluster_weights[c] + node.weight <= limits[c][1]]
+                if not valid_clusters:
+                    valid_clusters = list(range(num_clusters)) # Fallback if too tight
+
+                c_benefits = []
+                for c in valid_clusters:
+                    b = sum(adj.get(node.identifier, {}).get(other.identifier, 0) 
+                            for other in assignment if assignment[other] == c)
+                    c_benefits.append((b, c))
+                
+                c_benefits.sort(key=lambda x: x[0], reverse=True)
+                max_b = c_benefits[0][0]
+                rcl = [c for b, c in c_benefits if b >= max_b * 0.8]
+                chosen = random.choice(rcl) if rcl else random.choice(valid_clusters)
+                
+                assignment[node] = chosen
+                cluster_weights[chosen] += node.weight
+
+            improved = True
+            while improved:
+                improved = False
+                nodes_list = list(assignment.keys())
+                random.shuffle(nodes_list)
+                for i in range(len(nodes_list)):
+                    n1 = nodes_list[i]
+                    c1 = assignment[n1]
+                    for j in range(i + 1, len(nodes_list)):
+                        n2 = nodes_list[j]
+                        c2 = assignment[n2]
+                        if c1 == c2:
+                            continue
+                        
+                        new_w1 = cluster_weights[c1] - n1.weight + n2.weight
+                        new_w2 = cluster_weights[c2] - n2.weight + n1.weight
+                        
+                        if new_w1 <= limits[c1][1] and new_w2 <= limits[c2][1]:
+                            loss_c1 = sum(adj.get(n1.identifier, {}).get(other.identifier, 0) for other in assignment if assignment[other] == c1 and other != n1)
+                            gain_c1 = sum(adj.get(n2.identifier, {}).get(other.identifier, 0) for other in assignment if assignment[other] == c1 and other != n1)
+                            
+                            loss_c2 = sum(adj.get(n2.identifier, {}).get(other.identifier, 0) for other in assignment if assignment[other] == c2 and other != n2)
+                            gain_c2 = sum(adj.get(n1.identifier, {}).get(other.identifier, 0) for other in assignment if assignment[other] == c2 and other != n2)
+                            
+                            delta = gain_c1 - loss_c1 + gain_c2 - loss_c2
+                            if delta > 0:
+                                assignment[n1] = c2
+                                assignment[n2] = c1
+                                cluster_weights[c1] = new_w1
+                                cluster_weights[c2] = new_w2
+                                c1, c2 = c2, c1
+                                improved = True
+
+            total_benefit = sum(adj.get(n1.identifier, {}).get(n2.identifier, 0) 
+                              for n1 in assignment for n2 in assignment 
+                              if n1.identifier < n2.identifier and assignment[n1] == assignment[n2])
+            
+            if total_benefit > best_benefit:
+                best_benefit = total_benefit
+                best_assignment = assignment.copy()
+                best_weights = cluster_weights.copy()
+
+        cluster_graphs = []
+        if best_assignment:
+            for c in range(num_clusters):
+                c_nodes = [n for n in best_assignment if best_assignment[n] == c]
+                c_edges = []
+                for i, n1 in enumerate(c_nodes):
+                    for j in range(i + 1, len(c_nodes)):
+                        n2 = c_nodes[j]
+                        if n2.identifier in adj.get(n1.identifier, {}):
+                            c_edges.append(Edge(n1.identifier, n2.identifier, adj[n1.identifier][n2.identifier]))
+                cg = Graph(c_nodes, c_edges, self.is_directed, self.is_edge_weighted, self.is_node_weighted, num_clusters=1)
+                cluster_graphs.append(cg)
+
+        return {
+            "cluster_weights": best_weights,
+            "total_benefit": best_benefit,
+            "clusters": cluster_graphs
+        }
 
     # Função Criada por Raptor Mini 
     def capable_clustering_v4():
