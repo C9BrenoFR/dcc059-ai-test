@@ -71,8 +71,8 @@ def menu(g) :
 				print("\n+---------------------------------------------------------------+")
 				print("| Algoritmo | Tempo (ms)     | Beneficio Total | Nº de Clusters |")
 				print("+-----------+----------------+-----------------+----------------+")
-				print(f"| GPT       |   {gpt_benchmark:12.3f} |    {gpt_pcc["total_benefit"]:12.3f} |   {len(gpt_pcc["cluster_weights"]):12d} |")
-				print(f"| Claude    |   {claude_benchmark:12.3f} |    {claude_pcc["total_benefit"]:12.3f} |   {len(claude_pcc["cluster_weights"]):12d} |")
+				print(f"| GPT       | {gpt_benchmark:14.3f} | {gpt_pcc["total_benefit"]:15.5f} | {len(gpt_pcc["cluster_weights"]):14d} |")
+				print(f"| Claude    | {claude_benchmark:14.3f} | {claude_pcc["total_benefit"]:15.5f} | {len(claude_pcc["cluster_weights"]):14d} |")
 				print("+-----------+----------------+-----------------+----------------+")
 			case _:
 				print("Opção inválida")
