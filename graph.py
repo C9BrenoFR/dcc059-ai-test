@@ -58,8 +58,289 @@ class Graph:
     #   3. Pasta de instancias ccplib
 
     # Função Criada por GPT-5.2-Codex 
-    def capable_clustering_v1():
-        pass
+    def capable_clustering_v1(self):
+        """
+        Solve the capacitated clustering problem with a greedy + local search.
+
+        Returns a dict with:
+            clusters: Graph with only intra-cluster edges (each component is a cluster)
+            assignment: dict mapping node_id -> cluster_index
+            cluster_weights: list of total weights per cluster
+            total_benefit: sum of edge weights within clusters
+        """
+        if self.num_clusters is None:
+            raise ValueError("num_clusters is not set on the graph")
+
+        if not self.nodes:
+            return {
+                "clusters": [[] for _ in range(self.num_clusters)],
+                "assignment": {},
+                "cluster_weights": [0.0 for _ in range(self.num_clusters)],
+                "total_benefit": 0.0,
+            }
+
+        def build_cluster_bounds():
+            if self.cluster_limits:
+                if len(self.cluster_limits) >= 2 * self.num_clusters:
+                    bounds = []
+                    for idx in range(self.num_clusters):
+                        min_cap = float(self.cluster_limits[idx * 2])
+                        max_cap = float(self.cluster_limits[idx * 2 + 1])
+                        bounds.append((min_cap, max_cap))
+                    return bounds
+                if len(self.cluster_limits) == 2:
+                    min_cap = float(self.cluster_limits[0])
+                    max_cap = float(self.cluster_limits[1])
+                    return [(min_cap, max_cap) for _ in range(self.num_clusters)]
+                raise ValueError("cluster_limits does not match num_clusters")
+
+            if self.cluster_capacity is not None:
+                max_cap = float(self.cluster_capacity)
+                return [(0.0, max_cap) for _ in range(self.num_clusters)]
+
+            return [(0.0, float("inf")) for _ in range(self.num_clusters)]
+
+        cluster_bounds = build_cluster_bounds()
+        cluster_mins = [bound[0] for bound in cluster_bounds]
+        cluster_maxs = [bound[1] for bound in cluster_bounds]
+        for idx, (min_cap, max_cap) in enumerate(cluster_bounds):
+            if min_cap > max_cap:
+                raise ValueError(f"Invalid cluster_limits for cluster {idx}")
+
+        node_weights = {
+            node.identifier: float(node.weight) if self.is_node_weighted else 1.0
+            for node in self.nodes
+        }
+
+        total_min = sum(cluster_mins)
+        total_weight = sum(node_weights.values())
+        if total_weight + 1e-9 < total_min:
+            raise ValueError("Total node weight is below minimum cluster limits")
+
+        for node_id, weight in node_weights.items():
+            if all(weight > max_cap + 1e-9 for max_cap in cluster_maxs):
+                raise ValueError(f"Node {node_id} exceeds all cluster max limits")
+
+        adjacency = {node.identifier: [] for node in self.nodes}
+        for edge in self.edges:
+            adjacency[edge.origin].append((edge.destination, float(edge.weight)))
+            adjacency[edge.destination].append((edge.origin, float(edge.weight)))
+
+        def is_adjacent_to_cluster(node_id, cluster_members):
+            if not cluster_members:
+                return True
+            for neighbor_id, _ in adjacency[node_id]:
+                if neighbor_id in cluster_members:
+                    return True
+            return False
+
+        def is_cluster_connected(members):
+            if len(members) <= 1:
+                return True
+            start = next(iter(members))
+            visited = {start}
+            stack = [start]
+            while stack:
+                current = stack.pop()
+                for neighbor_id, _ in adjacency[current]:
+                    if neighbor_id in members and neighbor_id not in visited:
+                        visited.add(neighbor_id)
+                        stack.append(neighbor_id)
+            return len(visited) == len(members)
+
+        def gain_to_cluster(node_id, cluster_id, cluster_members):
+            gain = 0.0
+            for neighbor_id, weight in adjacency[node_id]:
+                if neighbor_id in cluster_members:
+                    gain += weight
+            return gain
+
+        node_scores = {
+            node_id: sum(weight for _, weight in neighbors)
+            for node_id, neighbors in adjacency.items()
+        }
+        node_order = sorted(node_weights.keys(), key=lambda n: (-node_scores[n], n))
+
+        clusters = [[] for _ in range(self.num_clusters)]
+        cluster_members = [set() for _ in range(self.num_clusters)]
+        cluster_weights = [0.0 for _ in range(self.num_clusters)]
+        assignment = {}
+
+        unassigned = set(node_weights.keys())
+
+        isolated_nodes = [node_id for node_id, neighbors in adjacency.items() if not neighbors]
+        if len(isolated_nodes) > self.num_clusters:
+            raise ValueError("Too many isolated nodes to keep clusters connected")
+
+        seed_order = isolated_nodes + [
+            node_id for node_id in node_order if node_id not in isolated_nodes
+        ]
+
+        seed_index = 0
+        for cluster_id in range(self.num_clusters):
+            if not unassigned:
+                break
+            selected = None
+            while seed_index < len(seed_order):
+                candidate = seed_order[seed_index]
+                seed_index += 1
+                if candidate in unassigned:
+                    if node_weights[candidate] <= cluster_maxs[cluster_id] + 1e-9:
+                        selected = candidate
+                        break
+            if selected is None:
+                continue
+            clusters[cluster_id].append(selected)
+            cluster_members[cluster_id].add(selected)
+            cluster_weights[cluster_id] += node_weights[selected]
+            assignment[selected] = cluster_id
+            unassigned.remove(selected)
+
+        def pick_best_for_needed():
+            needed_clusters = [
+                idx
+                for idx in range(self.num_clusters)
+                if cluster_weights[idx] + 1e-9 < cluster_mins[idx]
+            ]
+            if not needed_clusters:
+                return None, None
+
+            best_node = None
+            best_cluster = None
+            best_gain = None
+            best_need = None
+
+            for node_id in list(unassigned):
+                node_weight = node_weights[node_id]
+                for cluster_id in needed_clusters:
+                    if cluster_weights[cluster_id] + node_weight > cluster_maxs[cluster_id] + 1e-9:
+                        continue
+                    if not is_adjacent_to_cluster(node_id, cluster_members[cluster_id]):
+                        continue
+                    gain = gain_to_cluster(node_id, cluster_id, cluster_members[cluster_id])
+                    need = cluster_mins[cluster_id] - cluster_weights[cluster_id]
+                    if best_gain is None or gain > best_gain + 1e-9:
+                        best_gain = gain
+                        best_node = node_id
+                        best_cluster = cluster_id
+                        best_need = need
+                    elif abs(gain - best_gain) <= 1e-9 and need > (best_need or 0.0) + 1e-9:
+                        best_node = node_id
+                        best_cluster = cluster_id
+                        best_need = need
+            return best_node, best_cluster
+
+        while True:
+            node_id, cluster_id = pick_best_for_needed()
+            if node_id is None:
+                break
+            clusters[cluster_id].append(node_id)
+            cluster_members[cluster_id].add(node_id)
+            cluster_weights[cluster_id] += node_weights[node_id]
+            assignment[node_id] = cluster_id
+            unassigned.remove(node_id)
+
+        for idx in range(self.num_clusters):
+            if cluster_weights[idx] + 1e-9 < cluster_mins[idx]:
+                raise ValueError("Failed to satisfy minimum cluster limits")
+
+        for node_id in list(unassigned):
+            node_weight = node_weights[node_id]
+            best_cluster = None
+            best_gain = None
+            for cluster_id in range(self.num_clusters):
+                if cluster_weights[cluster_id] + node_weight > cluster_maxs[cluster_id] + 1e-9:
+                    continue
+                if not is_adjacent_to_cluster(node_id, cluster_members[cluster_id]):
+                    continue
+                gain = gain_to_cluster(node_id, cluster_id, cluster_members[cluster_id])
+                if best_gain is None or gain > best_gain + 1e-9:
+                    best_gain = gain
+                    best_cluster = cluster_id
+            if best_cluster is None:
+                raise ValueError("No feasible cluster keeps connectivity for node assignment")
+            clusters[best_cluster].append(node_id)
+            cluster_members[best_cluster].add(node_id)
+            cluster_weights[best_cluster] += node_weights[node_id]
+            assignment[node_id] = best_cluster
+            unassigned.remove(node_id)
+
+        max_passes = 6
+        for _ in range(max_passes):
+            improved = False
+            for node_id in node_order:
+                current_cluster = assignment[node_id]
+                node_weight = node_weights[node_id]
+                if cluster_weights[current_cluster] - node_weight < cluster_mins[current_cluster] - 1e-9:
+                    continue
+                if len(cluster_members[current_cluster]) <= 1:
+                    continue
+
+                current_gain = gain_to_cluster(
+                    node_id,
+                    current_cluster,
+                    cluster_members[current_cluster],
+                )
+                best_cluster = current_cluster
+                best_delta = 0.0
+
+                for cluster_id in range(self.num_clusters):
+                    if cluster_id == current_cluster:
+                        continue
+                    if cluster_weights[cluster_id] + node_weight > cluster_maxs[cluster_id] + 1e-9:
+                        continue
+                    if not is_adjacent_to_cluster(node_id, cluster_members[cluster_id]):
+                        continue
+                    gain = gain_to_cluster(node_id, cluster_id, cluster_members[cluster_id])
+                    delta = gain - current_gain
+                    if delta > best_delta + 1e-9:
+                        best_delta = delta
+                        best_cluster = cluster_id
+
+                if best_cluster != current_cluster:
+                    remaining_members = cluster_members[current_cluster] - {node_id}
+                    if not is_cluster_connected(remaining_members):
+                        continue
+                    cluster_members[current_cluster].remove(node_id)
+                    cluster_members[best_cluster].add(node_id)
+                    clusters[current_cluster].remove(node_id)
+                    clusters[best_cluster].append(node_id)
+                    cluster_weights[current_cluster] -= node_weight
+                    cluster_weights[best_cluster] += node_weight
+                    assignment[node_id] = best_cluster
+                    improved = True
+
+            if not improved:
+                break
+
+        total_benefit = 0.0
+        for edge in self.edges:
+            if assignment[edge.origin] == assignment[edge.destination]:
+                total_benefit += float(edge.weight)
+
+        cluster_edges = [
+            edge
+            for edge in self.edges
+            if assignment[edge.origin] == assignment[edge.destination]
+        ]
+        clusters_graph = Graph(
+            list(self.nodes),
+            cluster_edges,
+            self.is_directed,
+            self.is_edge_weighted,
+            self.is_node_weighted,
+            num_clusters=self.num_clusters,
+            cluster_type=self.cluster_type,
+            cluster_limits=self.cluster_limits,
+            cluster_capacity=self.cluster_capacity,
+        )
+
+        return {
+            "clusters": clusters_graph,
+            "assignment": assignment,
+            "cluster_weights": cluster_weights,
+            "total_benefit": total_benefit,
+        }
 
     # Função Criada por Claude Haiku 4.5 
     def capable_clustering_v2(self):
