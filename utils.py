@@ -1,3 +1,4 @@
+import math
 import matplotlib.pyplot as plt
 import networkx as nx
 
@@ -147,3 +148,92 @@ def draw_graph(g):
 			edge_labels=edge_labels,
 		)
 	plt.show()
+
+
+def draw_graphs(graphs):
+    n = len(graphs)
+
+    cols = math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+
+    fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 6 * rows))
+
+    # Normaliza axes para ser sempre iterável
+    if n == 1:
+        axes = [axes]
+    else:
+        axes = axes.flatten()
+
+    for i, g in enumerate(graphs):
+        ax = axes[i]
+
+        graph_type = nx.DiGraph if g.is_directed else nx.Graph
+        nx_graph = graph_type()
+
+        for node in g.nodes:
+            nx_graph.add_node(
+                node.identifier,
+                weight=node.weight
+            )
+
+        for edge in g.edges:
+            nx_graph.add_edge(
+                edge.origin,
+                edge.destination,
+                weight=edge.weight
+            )
+
+        pos = nx.spring_layout(nx_graph)
+
+        nx.draw(
+            nx_graph,
+            pos,
+            ax=ax,
+            with_labels=False,
+            node_size=1200,
+            node_color="#f7d487",
+            edge_color="#333333",
+            arrows=g.is_directed
+        )
+
+        if g.is_node_weighted:
+            node_labels = {
+                node: f"{node}\n(w={data['weight']})"
+                for node, data in nx_graph.nodes(data=True)
+            }
+        else:
+            node_labels = {
+                node: str(node)
+                for node in nx_graph.nodes
+            }
+
+        nx.draw_networkx_labels(
+            nx_graph,
+            pos,
+            labels=node_labels,
+            ax=ax,
+            font_weight="bold"
+        )
+
+        if g.is_edge_weighted:
+            edge_labels = {
+                (u, v): f"w={data['weight']}"
+                for u, v, data in nx_graph.edges(data=True)
+            }
+
+            nx.draw_networkx_edge_labels(
+                nx_graph,
+                pos,
+                edge_labels=edge_labels,
+                ax=ax
+            )
+
+        ax.set_title(f"Cluster {i + 1}")
+        ax.axis("off")
+
+    # Remove eixos vazios
+    for i in range(n, len(axes)):
+        fig.delaxes(axes[i])
+
+    plt.tight_layout()
+    plt.show()
